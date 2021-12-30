@@ -6,7 +6,7 @@
 /*   By: hryuuta <hryuuta@student.42tokyo.jp>       +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/12/29 14:54:21 by hryuuta           #+#    #+#             */
-/*   Updated: 2021/12/29 21:20:59 by hryuuta          ###   ########.fr       */
+/*   Updated: 2021/12/30 15:19:21 by hryuuta          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,29 +29,23 @@ func makeCh() chan string {
 var t int
 
 func init() {
-	//オプションで制限時間をできる
-	flag.IntVar(&t, "t", 10, "制限時間(分)")
+	flag.IntVar(&t, "t", 30, "制限時間(分)")
 	flag.Parse()
 }
 
 func input(r io.Reader) <-chan string {
-	// TODO: チャネルを作る
 	vh := makeCh()
 	go func() {
 		s := bufio.NewScanner(r)
 		for s.Scan() {
-			// TODO: チャネルに読み込んだ文字列を送る
 			vh <- s.Text()
 		}
-		// TODO: チャネルを閉じる
 		close(vh)
 	}()
-	// TODO: チャネルを返す
 	return vh
 }
 
 func getwords_from(txt_path string) ([]string, error) {
-	// テキストファイルのパスからテキストに書き込まれた単語をリスト化して返す
 	var words []string
 	sf, err := os.Open(txt_path)
 	if err != nil {
@@ -79,7 +73,10 @@ func gameStart(ctx context.Context, words []string) int {
 		println(words[i])
 		fmt.Print("->")
 		select {
-		case x := <-ch:
+		case x, ok := <-ch:
+			if !ok {
+				return count
+			}
 			if x == words[i] {
 				count++
 				println("○")
@@ -87,7 +84,6 @@ func gameStart(ctx context.Context, words []string) int {
 				println("x")
 			}
 		case <-ctx.Done():
-			//fmt.Println("done:", ctx.Err()) // done: context canceled
 			return count
 		}
 	}
@@ -99,7 +95,7 @@ func main() {
 	defer cancel()
 	words, err := getwords_from("text.txt")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "読み込みに失敗しました", err)
+		fmt.Fprintln(os.Stderr, "No such file or directory", err)
 		os.Exit(1)
 	}
 	println("Time Up! Score = ", gameStart(ctx, words))
