@@ -6,7 +6,7 @@
 /*   By: hryuuta <hryuuta@student.42tokyo.jp>       +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/12/31 23:46:36 by hryuuta           #+#    #+#             */
-/*   Updated: 2022/01/03 16:27:02 by hryuuta          ###   ########.fr       */
+/*   Updated: 2022/01/05 16:10:32 by hryuuta          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -41,20 +41,12 @@ func DownloadFile(filepath string, url string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	fileName := path.Base(url)
-	println(fileName)
-	println(resp.Header.Get("Content-Length"))
-	println(resp.Header)
-	/* if resp.Header.Get("Accept-Ranges") != "bytes" {
-		err = fmt.Errorf("Accept-Ranges = bytesではありません")
-		return err
-	} */
+	//fileName := path.Base(url)
 	out, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
@@ -66,18 +58,19 @@ func sizeCheck(url string) (int, error) {
 		return 0, err
 	}
 	defer resp.Body.Close()
-	if resp.Header.Get("Accept-Ranges") != "bytes" {
+	/* if resp.Header.Get("Accept-Ranges") != "bytes" {
 		err = fmt.Errorf("Accept-Ranges = bytesではありません")
 		return 0, err
-	}
+	} */
 	size, err := strconv.Atoi(resp.Header.Get("Content-Length"))
 	return size, err
 }
 
-func sizeSplit(size int) (int, int) {
+func sizeSplit(size int, fileName string) []Chunk {
 	var count int
 
 	count = 5
+	parts := make([]Chunk, count)
 	var low, hight int
 	for i := 0; i < count; i++ {
 		if i == 0 {
@@ -90,21 +83,45 @@ func sizeSplit(size int) (int, int) {
 		} else {
 			hight = (size * (i + 1) / 5)
 		}
-		println("low =", low, "hight =", hight)
+		fn := fileName + "_" + strconv.Itoa(i)
+		part := Chunk{low: low, hight: hight, filename: fn}
+		parts[i] = part
+		//println("low =", low, "hight =", hight)
 	}
-	return low, hight
+	return parts
+}
+
+func mkDirTmp() error {
+	return os.Mkdir("tmp", 0777)
+}
+
+func rmDirTmp() error {
+	return os.Remove("tmp")
+}
+
+func (p Chunk) getFilePath() string {
+	return "/tmp/" + p.filename
 }
 
 func SplitDownloadRun(fileUrl string) error {
 
+	if err := mkDirTmp(); err != nil {
+		return err
+	}
 	fullSize, err := sizeCheck(fileUrl)
 	if err != nil {
 		return err
 	}
-
-	println(fullSize)
-	if err := DownloadFile("avatar.jpg", fileUrl); err != nil {
+	fileName := path.Base(fileUrl)
+	parts := sizeSplit(fullSize, fileName)
+	for _, v := range parts {
+		fmt.Println("Split", v)
+	}
+	/* if err := DownloadFile("avatar.jpg", fileUrl); err != nil {
 		panic(err)
+	} */
+	if err := rmDirTmp(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -115,6 +132,14 @@ func main() {
 	if err := DownloadFile("avatar.jpg", fileUrl); err != nil {
 		panic(err)
 	} */
-	sizeSplit(1897)
+	//mkDirTmp()
+	/* fileName := path.Base(fileUrl)
+	parts := sizeSplit(2000, fileName)
+	println(parts)
+	for _, v := range parts {
+		//part := v
+		fmt.Println(v)
+	} */
+	//fmt.Println(sizeSplit(1897, "avatar.jpg"))
 	//Run(fileUrl)
 }
