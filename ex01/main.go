@@ -6,13 +6,15 @@
 /*   By: hryuuta <hryuuta@student.42tokyo.jp>       +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/12/31 23:46:36 by hryuuta           #+#    #+#             */
-/*   Updated: 2022/01/07 22:53:50 by hryuuta          ###   ########.fr       */
+/*   Updated: 2022/01/10 19:24:50 by hryuuta          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +22,9 @@ import (
 	"os"
 	"path"
 	"strconv"
+
+	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 )
 
 type Option struct {
@@ -32,38 +37,13 @@ type Chunk struct {
 	low      int
 	hight    int
 	filename string
-	dirname  string
-}
-
-func (p Chunk) Init() {
-	p.low = 0
-	p.hight = 0
-	p.filename = ""
-	p.dirname = ""
+	//dirname  string
 }
 
 func (o *Option) Init() {
 	o.TargetURL = ""
-	o.PCount = 1000
+	o.PCount = 100
 	o.OutputDir = "./new/"
-}
-
-func DownloadFile(filepath, url string, low, hight int) error {
-	//ctx, cancel := context.WithTimeout(context.Background(), time.Duration(10)*time.Second)
-	//defer cancel()
-	resp, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	resp.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", low, hight))
-	res, err := http.DefaultClient.Do(resp)
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, res.Body)
-	return err
 }
 
 func sizeCheck(url string) (int, error) {
@@ -97,6 +77,7 @@ func sizeSplit(size int, fileName string, option Option) []Chunk {
 			hight = (size * (i + 1) / option.PCount)
 		}
 		fn := fileName + "_" + strconv.Itoa(i)
+		//println(fn)
 		part := Chunk{low: low, hight: hight, filename: fn}
 		parts[i] = part
 	}
@@ -148,8 +129,33 @@ func removePartFile(parts []Chunk) error {
 	return nil
 }
 
-func SplitDownloadRun(fileUrl string, option Option) error {
+func DownloadFile(filepath, url string, low, hight int) error {
+	resp, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	resp.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", low, hight))
+	res, err := http.DefaultClient.Do(resp)
+	if err != nil {
+		return err
+	}
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, res.Body); err != nil {
+		return err
+	}
+	fmt.Printf(filepath + ": Downloding Part File")
+	color.Green("OK")
+	return nil
+}
 
+func SplitDownloadRun(fileUrl string, option Option) error {
+	eg, ctx := errgroup.WithContext(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if err := mkDirTmp("tmp"); err != nil {
 		return err
 	}
@@ -161,11 +167,26 @@ func SplitDownloadRun(fileUrl string, option Option) error {
 	parts := sizeSplit(fullSize, fileName, option)
 	for _, v := range parts {
 		p := v
-		fmt.Println(p)
-		if err := DownloadFile(v.getFilePath(), fileUrl, p.low, p.hight); err != nil {
-			rmDirTmp("tmp")
-			panic(err)
-		}
+		fmt.Println("Downloding Part File Started. :" + p.filename)
+		eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if err := DownloadFile(p.getFilePath(), fileUrl, p.low, p.hight); err != nil {
+					return errors.New("error occurred")
+				}
+				return nil
+			}
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		removePartFile(parts)
+		rmDirTmp("tmp")
+		return err
+	} else {
+		fmt.Printf(fileName)
+		color.Yellow(": Downloading Part Files completed.")
 	}
 	if err := mkDirTmp("new"); err != nil {
 		return err
@@ -183,25 +204,8 @@ func SplitDownloadRun(fileUrl string, option Option) error {
 }
 
 func main() {
-
-	/* fileUrl := "https://4.bp.blogspot.com/-2-Ny23XgrF0/Ws69gszw2jI/AAAAAAABLdU/unbzWD_U8foWBwPKWQdGP1vEDoQoYjgZwCLcBGAs/s1600/top_banner.jpg"
-	if err := DownloadFile("avatar.jpg", fileUrl); err != nil {
-		panic(err)
-	} */
-	//mkDirTmp()
-	/* fileName := path.Base(fileUrl)
-	parts := sizeSplit(2000, fileName)
-	println(parts)
-	for _, v := range parts {
-		//part := v
-		fmt.Println(v)
-	} */
-	//fmt.Println(sizeSplit(1897, "avatar.jpg"))
-	//Run(fileUrl)
 	option := Option{}
 	option.Init()
-	//fmt.Println("aaaaa", os.Args[0])
-	//option.TargetURL = os.Args[1]
 	if err := SplitDownloadRun("https://releases.ubuntu.com/20.04/ubuntu-20.04.3-live-server-amd64.iso", option); err != nil {
 		log.Fatal(err)
 		return
