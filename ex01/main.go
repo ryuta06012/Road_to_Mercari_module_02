@@ -6,7 +6,7 @@
 /*   By: hryuuta <hryuuta@student.42tokyo.jp>       +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/12/31 23:46:36 by hryuuta           #+#    #+#             */
-/*   Updated: 2022/01/10 19:24:50 by hryuuta          ###   ########.fr       */
+/*   Updated: 2022/01/11 05:46:51 by hryuuta          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -77,7 +77,6 @@ func sizeSplit(size int, fileName string, option Option) []Chunk {
 			hight = (size * (i + 1) / option.PCount)
 		}
 		fn := fileName + "_" + strconv.Itoa(i)
-		//println(fn)
 		part := Chunk{low: low, hight: hight, filename: fn}
 		parts[i] = part
 	}
@@ -147,7 +146,7 @@ func DownloadFile(filepath, url string, low, hight int) error {
 	if _, err := io.Copy(out, res.Body); err != nil {
 		return err
 	}
-	fmt.Printf(filepath + ": Downloding Part File")
+	fmt.Printf(filepath + ": Downloding Part File ")
 	color.Green("OK")
 	return nil
 }
@@ -183,9 +182,10 @@ func SplitDownloadRun(fileUrl string, option Option) error {
 	if err := eg.Wait(); err != nil {
 		removePartFile(parts)
 		rmDirTmp("tmp")
+		cancel()
 		return err
 	} else {
-		fmt.Printf(fileName)
+		fmt.Printf("%s", fileName)
 		color.Yellow(": Downloading Part Files completed.")
 	}
 	if err := mkDirTmp("new"); err != nil {
